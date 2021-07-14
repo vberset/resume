@@ -4,21 +4,18 @@ use std::error::Error as StdError;
 use clap::Clap;
 use git2::Repository;
 
-use crate::error::Error;
+use crate::cli::{Command, SubCommand};
+use crate::config::Configuration;
+use crate::error::{Error, Result};
 use crate::message::{CommitType, ConventionalMessage};
 use crate::report::report;
+use std::path::Path;
 
+mod cli;
+mod config;
 mod error;
 mod message;
 mod report;
-
-#[derive(Clap, Debug)]
-#[clap(name = "resume")]
-struct Command {
-    repository: String,
-    #[clap(short, long, default_value = "master")]
-    branch: String,
-}
 
 type ChangeLog = HashMap<CommitType, Vec<ConventionalMessage>>;
 
@@ -34,15 +31,35 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), Error> {
+fn run() -> Result<()> {
     let command = Command::parse();
-    let repo = Repository::open(command.repository).expect("unable to open repository");
 
-    let reference = match repo.find_reference(&("refs/heads/".to_owned() + command.branch.as_str()))
-    {
+    match command.sub_command {
+        SubCommand::Repository(subcmd) => {
+            resume_repo(subcmd.repository, &subcmd.branch)?;
+        }
+        SubCommand::Projects(subcmd) => {
+            let config = Configuration::from_file(subcmd.config_file)?;
+            for project in &config.projects {
+                println!("# Project: {}\n", project.name);
+                resume_repo(
+                    &project.source,
+                    &project.branch.as_ref().unwrap_or(&config.default_branch),
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn resume_repo<P: AsRef<Path>>(path: P, branch: &str) -> Result<()> {
+    let repo = Repository::open(path).expect("unable to open repository");
+
+    let reference = match repo.find_reference(&("refs/heads/".to_owned() + branch)) {
         Ok(reference) => reference,
         Err(error) => {
-            return Err(Error::BranchDoesntExist(command.branch, error));
+            return Err(Error::BranchDoesntExist(branch.to_owned(), error));
         }
     };
 
@@ -64,6 +81,5 @@ fn run() -> Result<(), Error> {
     }
 
     report(&changelog);
-
     Ok(())
 }

@@ -1,5 +1,5 @@
-use crate::ChangeLog;
 use crate::message::CommitType;
+use crate::ChangeLog;
 
 pub fn report(changelog: &ChangeLog) {
     if let Some(features) = changelog.get(&CommitType::Feature) {
