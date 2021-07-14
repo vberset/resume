@@ -1,0 +1,20 @@
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+
+ident = @{ (alpha | digit | "-" )+ }
+
+ctype = @{ ident }
+scope = @{ ident }
+summary = { (!NEWLINE ~ ANY)* }
+break_mark = { "!" }
+
+headline = ${SOI ~  ctype ~ ("(" ~ scope ~ ")" )? ~ break_mark? ~ ": " ~ summary }
+text_block = { !trailers ~ NEWLINE{2,} ~ (!NEWLINE{2} ~ ANY)* }
+body = @{ text_block* }
+
+token = { ident }
+value = { ident }
+trailer = { token ~ ": " ~ value }
+trailers = { NEWLINE{2,} ~ trailer ~ (NEWLINE ~ trailer)* ~ NEWLINE? ~ EOI }
+
+message = { headline ~ body? ~ trailers? }
