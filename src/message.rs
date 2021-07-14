@@ -75,6 +75,10 @@ impl FromStr for ConventionalMessage {
                 Rule::trailers => {
                     let pairs = pair.clone().into_inner();
                     for pair in pairs {
+                        if pair.as_rule() == Rule::EOI {
+                            break;
+                        }
+
                         let mut pairs = pair.clone().into_inner();
                         let token = pairs
                             .next()
