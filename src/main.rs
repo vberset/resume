@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
+use std::path::Path;
 
 use clap::Clap;
-use git2::Repository;
+use git2::{Repository, Revwalk};
 
 use crate::cli::{Command, SubCommand};
 use crate::config::Configuration;
 use crate::error::{Error, Result};
 use crate::message::{CommitType, ConventionalMessage};
-use crate::report::report;
-use std::path::Path;
+use crate::report::build_report;
 
 mod cli;
 mod config;
@@ -36,24 +36,28 @@ fn run() -> Result<()> {
 
     match command.sub_command {
         SubCommand::Repository(subcmd) => {
-            resume_repo(subcmd.repository, &subcmd.branch)?;
+            println!("{}", resume_repo(subcmd.repository, &subcmd.branch)?);
         }
         SubCommand::Projects(subcmd) => {
             let config = Configuration::from_file(subcmd.config_file)?;
+            println!();
             for project in &config.projects {
+                println!("================================================================================\n");
                 println!("# Project: {}\n", project.name);
-                resume_repo(
+                let resume = resume_repo(
                     &project.source,
                     &project.branch.as_ref().unwrap_or(&config.default_branch),
                 )?;
+                println!("{}", resume);
             }
+            println!("================================================================================\n");
         }
     }
 
     Ok(())
 }
 
-fn resume_repo<P: AsRef<Path>>(path: P, branch: &str) -> Result<()> {
+fn resume_repo<P: AsRef<Path>>(path: P, branch: &str) -> Result<String> {
     let repo = Repository::open(path).expect("unable to open repository");
 
     let reference = match repo.find_reference(&("refs/heads/".to_owned() + branch)) {
@@ -66,6 +70,13 @@ fn resume_repo<P: AsRef<Path>>(path: P, branch: &str) -> Result<()> {
     let mut walker = repo.revwalk().unwrap();
     walker.push(reference.target().unwrap()).unwrap();
 
+    let changelog = build_changelog(&repo, walker);
+    let mut report = String::new();
+    build_report(&mut report, &changelog)?;
+    Ok(report)
+}
+
+fn build_changelog(repo: &Repository, walker: Revwalk) -> ChangeLog {
     let mut changelog = HashMap::new();
 
     for object in walker {
@@ -80,6 +91,5 @@ fn resume_repo<P: AsRef<Path>>(path: P, branch: &str) -> Result<()> {
         }
     }
 
-    report(&changelog);
-    Ok(())
+    changelog
 }

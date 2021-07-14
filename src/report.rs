@@ -1,28 +1,35 @@
+use std::fmt::Write;
+
+use crate::error::Result;
 use crate::message::CommitType;
 use crate::ChangeLog;
 
-pub fn report(changelog: &ChangeLog) {
+pub fn build_report(output: &mut dyn Write, changelog: &ChangeLog) -> Result<()> {
     if let Some(features) = changelog.get(&CommitType::Feature) {
-        println!("✨ New Features\n");
+        writeln!(output, "✨ New Features\n")?;
         for message in features {
-            println!(
+            writeln!(
+                output,
                 " - {} {}",
                 if message.is_breaking { "💥 " } else { "" },
                 message.summary
-            );
+            )?;
         }
-        println!();
+        writeln!(output)?;
     }
 
     if let Some(features) = changelog.get(&CommitType::BugFix) {
-        println!("🐛 Bug Fixes\n");
+        writeln!(output, "🐛 Bug Fixes\n")?;
         for message in features {
-            println!(
+            writeln!(
+                output,
                 " - {} {}",
                 if message.is_breaking { "💥 " } else { "" },
                 message.summary
-            );
+            )?;
         }
-        println!();
+        writeln!(output)?;
     }
+
+    Ok(())
 }

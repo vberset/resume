@@ -7,6 +7,7 @@ pub enum Error {
     IO(std::io::Error),
     BranchDoesntExist(String, git2::Error),
     Configuration(YamlErrorWrapper),
+    Format(std::fmt::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -17,6 +18,7 @@ impl fmt::Display for Error {
             Self::IO(_) => write!(f, "I/O error"),
             Self::BranchDoesntExist(name, _) => write!(f, "Branch {} doesn't exist", name),
             Self::Configuration(_) => write!(f, "Invalid configuration"),
+            Self::Format(_) => write!(f, "Formatting error"),
         }
     }
 }
@@ -27,6 +29,7 @@ impl StdError for Error {
             Self::IO(source) => Some(source),
             Self::BranchDoesntExist(_, source) => Some(source),
             Self::Configuration(source) => Some(source),
+            Self::Format(source) => Some(source),
         }
     }
 }
@@ -40,6 +43,12 @@ impl From<std::io::Error> for Error {
 impl From<serde_yaml::Error> for Error {
     fn from(error: serde_yaml::Error) -> Self {
         Error::Configuration(YamlErrorWrapper(error))
+    }
+}
+
+impl From<std::fmt::Error> for Error {
+    fn from(error: std::fmt::Error) -> Self {
+        Error::Format(error)
     }
 }
 
