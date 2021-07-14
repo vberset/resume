@@ -6,9 +6,11 @@ use git2::Repository;
 
 use crate::error::Error;
 use crate::message::{CommitType, ConventionalMessage};
+use crate::report::report;
 
 mod error;
 mod message;
+mod report;
 
 #[derive(Clap, Debug)]
 #[clap(name = "resume")]
@@ -17,6 +19,8 @@ struct Command {
     #[clap(short, long, default_value = "master")]
     branch: String,
 }
+
+type ChangeLog = HashMap<CommitType, Vec<ConventionalMessage>>;
 
 fn main() {
     if let Err(error) = run() {
@@ -59,29 +63,7 @@ fn run() -> Result<(), Error> {
         }
     }
 
-    if let Some(features) = changelog.get(&CommitType::Feature) {
-        println!("✨ New Features\n");
-        for message in features {
-            println!(
-                " - {} {}",
-                if message.is_breaking { "💥 " } else { "" },
-                message.summary
-            );
-        }
-        println!();
-    }
-
-    if let Some(features) = changelog.get(&CommitType::BugFix) {
-        println!("🐛 Bug Fixes\n");
-        for message in features {
-            println!(
-                " - {} {}",
-                if message.is_breaking { "💥 " } else { "" },
-                message.summary
-            );
-        }
-        println!();
-    }
+    report(&changelog);
 
     Ok(())
 }
