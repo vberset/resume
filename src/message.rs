@@ -5,7 +5,7 @@ use pest_derive::Parser;
 
 /// Parsed commit message following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 /// convention.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ConventionalMessage {
     pub ctype: CommitType,
     pub scope: Option<String>,
@@ -70,7 +70,7 @@ impl FromStr for ConventionalMessage {
                     }
                 }
                 Rule::body => {
-                    message.body = Some(pair.as_str().to_owned());
+                    message.body = Some(pair.as_str().trim().to_owned());
                 }
                 Rule::trailers => {
                     let pairs = pair.clone().into_inner();
@@ -84,11 +84,13 @@ impl FromStr for ConventionalMessage {
                             .next()
                             .expect("broken parser: MUST have token")
                             .as_str()
+                            .trim()
                             .to_owned();
                         let value = pairs
                             .next()
                             .expect("broken parser: MUST have value")
                             .as_str()
+                            .trim()
                             .to_owned();
                         message.trailers.push((token, value));
                     }
@@ -117,5 +119,76 @@ impl FromStr for CommitType {
             "test" => Self::Test,
             s => Self::Other(s.to_owned()),
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_simple_message() {
+        let expected = ConventionalMessage {
+            ctype: CommitType::Feature,
+            scope: None,
+            is_breaking: false,
+            summary: "new feature".to_string(),
+            body: None,
+            trailers: vec![],
+        };
+
+        let input = format!("feat: {}", &expected.summary);
+        let message = input.parse().unwrap();
+        assert_eq!(expected, message);
+    }
+
+    #[test]
+    fn test_parse_message_with_trailers() {
+        let expected = ConventionalMessage {
+            ctype: CommitType::Feature,
+            scope: None,
+            is_breaking: false,
+            summary: "new feature".to_string(),
+            body: None,
+            trailers: vec![
+                ("Team".to_string(), "X functional".to_string()),
+                ("foo".to_string(), "bar metal".to_string()),
+            ],
+        };
+
+        let input = format!(
+            "feat: {}\n\n{}: {}\n{}: {}",
+            &expected.summary,
+            &expected.trailers[0].0,
+            &expected.trailers[0].1,
+            &expected.trailers[1].0,
+            &expected.trailers[1].1,
+        );
+        let message = input.parse().unwrap();
+        assert_eq!(expected, message);
+    }
+
+    #[test]
+    fn test_parse_message_with_all_syntaxes() {
+        let expected = ConventionalMessage {
+            ctype: CommitType::BugFix,
+            scope: Some("scope".to_string()),
+            is_breaking: true,
+            summary: "the summary".to_string(),
+            body: Some("Some body content\n\n\nmultiple\nlines\nblock".to_string()),
+            trailers: vec![("Key".to_string(), "Value".to_string())],
+        };
+
+        let input = format!(
+            "fix({})!: {}\n\n{}\n\n{}: {} \n",
+            expected.scope.as_ref().unwrap(),
+            &expected.summary,
+            expected.body.as_ref().unwrap(),
+            &expected.trailers[0].0,
+            &expected.trailers[0].1,
+        );
+
+        let message = input.parse().unwrap();
+        assert_eq!(expected, message);
     }
 }
