@@ -9,7 +9,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::BranchDoesntExist(name, _) => write!(f, "Branche {} doesn't exist", name),
+            Self::BranchDoesntExist(name, _) => write!(f, "Branch {} doesn't exist", name),
         }
     }
 }
