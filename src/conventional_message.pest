@@ -1,10 +1,10 @@
 alpha = { 'a'..'z' | 'A'..'Z' }
 digit = { '0'..'9' }
 
-ident = @{ (alpha | digit | "-" )+ }
+ident = @{ (alpha | digit | "-" | "/" | "_" | "." )+ }
 
 ctype = @{ ident }
-scope = @{ ident }
+scope = @{ (!("(" | ")") ~ ANY)* }
 summary = { (!NEWLINE ~ ANY)* }
 break_mark = { "!" }
 
