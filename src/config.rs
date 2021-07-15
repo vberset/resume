@@ -16,7 +16,7 @@ pub struct Configuration {
 #[derive(Debug, Deserialize)]
 pub struct Project {
     pub name: String,
-    pub source: String,
+    pub origin: String,
     pub branch: Option<String>,
 }
 

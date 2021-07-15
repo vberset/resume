@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 
 #[derive(Debug)]
 pub enum Error {
+    Git(git2::Error),
     IO(std::io::Error),
     BranchDoesntExist(String, git2::Error),
     Configuration(YamlErrorWrapper),
@@ -15,6 +16,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Git(_) => write!(f, "git error"),
             Self::IO(_) => write!(f, "I/O error"),
             Self::BranchDoesntExist(name, _) => write!(f, "Branch {} doesn't exist", name),
             Self::Configuration(_) => write!(f, "Invalid configuration"),
@@ -26,6 +28,7 @@ impl fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
+            Self::Git(source) => Some(source),
             Self::IO(source) => Some(source),
             Self::BranchDoesntExist(_, source) => Some(source),
             Self::Configuration(source) => Some(source),
@@ -49,6 +52,12 @@ impl From<serde_yaml::Error> for Error {
 impl From<std::fmt::Error> for Error {
     fn from(error: std::fmt::Error) -> Self {
         Error::Format(error)
+    }
+}
+
+impl From<git2::Error> for Error {
+    fn from(error: git2::Error) -> Self {
+        Error::Git(error)
     }
 }
 

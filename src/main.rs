@@ -1,21 +1,23 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
-use std::path::Path;
 
 use clap::Clap;
-use git2::{Repository, Revwalk};
+use git2::{AutotagOption, BranchType, Cred, FetchOptions, RemoteCallbacks, Repository, Revwalk};
+use git2::build::RepoBuilder;
 
 use crate::cli::{Command, SubCommand};
 use crate::config::Configuration;
 use crate::error::{Error, Result};
 use crate::message::{CommitType, ConventionalMessage};
 use crate::report::build_report;
+use crate::utils::get_cache_folder;
 
 mod cli;
 mod config;
 mod error;
 mod message;
 mod report;
+mod utils;
 
 type ChangeLog = HashMap<CommitType, Vec<ConventionalMessage>>;
 
@@ -36,18 +38,23 @@ fn run() -> Result<()> {
 
     match command.sub_command {
         SubCommand::Repository(subcmd) => {
-            println!("{}", resume_repo(subcmd.repository, &subcmd.branch)?);
+            let repo = Repository::open(subcmd.repository).unwrap();
+            println!("{}", resume_repo(repo, &subcmd.branch)?);
         }
         SubCommand::Projects(subcmd) => {
             let config = Configuration::from_file(subcmd.config_file)?;
             println!();
             for project in &config.projects {
+                let branch_name = project.branch.as_ref().unwrap_or(&config.default_branch);
+                let repo = open_or_clone_repo(&project.origin, branch_name)?;
+                fetch_branch(&repo, branch_name)?;
                 println!("================================================================================\n");
                 println!("# Project: {}\n", project.name);
                 let resume = resume_repo(
-                    &project.source,
+                    repo,
                     &project.branch.as_ref().unwrap_or(&config.default_branch),
                 )?;
+
                 println!("{}", resume);
             }
             println!("================================================================================\n");
@@ -57,18 +64,68 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn resume_repo<P: AsRef<Path>>(path: P, branch: &str) -> Result<String> {
-    let repo = Repository::open(path).expect("unable to open repository");
+fn open_or_clone_repo(origin: &str, branch_name: &str) -> Result<Repository> {
+    let name = origin.split('/').last().unwrap();
+    let mut path = get_cache_folder();
+    path.push(name);
 
-    let reference = match repo.find_reference(&("refs/heads/".to_owned() + branch)) {
-        Ok(reference) => reference,
-        Err(error) => {
-            return Err(Error::BranchDoesntExist(branch.to_owned(), error));
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username_from_url, _allowed_types| {
+        Cred::ssh_key_from_agent(username_from_url.unwrap())
+    });
+
+    let mut fetch_option = FetchOptions::new();
+    fetch_option
+        .remote_callbacks(callbacks)
+        .download_tags(AutotagOption::All);
+
+    let repo = match Repository::open(&path) {
+        Ok(repo) => {
+            repo
+        }
+        Err(_) => {
+            RepoBuilder::new()
+                .fetch_options(fetch_option)
+                .branch(branch_name)
+                .bare(true)
+                .clone(origin, path.as_ref())?
+        }
+    };
+
+    Ok(repo)
+}
+
+fn fetch_branch(repo: &Repository, branch_name: &str) -> Result<()> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username_from_url, _allowed_types| {
+        Cred::ssh_key_from_agent(username_from_url.unwrap())
+    });
+
+    let mut fetch_option = FetchOptions::new();
+    fetch_option
+        .remote_callbacks(callbacks)
+        .download_tags(AutotagOption::All);
+
+    let mut remote = repo.find_remote("origin")?;
+    remote.fetch(&[branch_name], Some(&mut fetch_option), None)?;
+    Ok(())
+}
+
+fn resume_repo(repo: Repository, branch: &str) -> Result<String> {
+    let branch = match repo.find_branch(branch, BranchType::Local) {
+        Ok(branch) => branch,
+        Err(_) => {
+            match repo.find_branch(branch, BranchType::Remote) {
+                Ok(branch) => branch,
+                Err(error) => {
+                    return Err(Error::BranchDoesntExist(branch.to_owned(), error));
+                }
+            }
         }
     };
 
     let mut walker = repo.revwalk().unwrap();
-    walker.push(reference.target().unwrap()).unwrap();
+    walker.push(branch.get().target().unwrap()).unwrap();
 
     let changelog = build_changelog(&repo, walker);
     let mut report = String::new();
