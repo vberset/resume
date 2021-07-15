@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 
 use clap::Clap;
-use git2::{AutotagOption, BranchType, Cred, FetchOptions, RemoteCallbacks, Repository, Revwalk};
+use git2::{AutotagOption, Branch, BranchType, Cred, FetchOptions, RemoteCallbacks, Repository, Revwalk};
 use git2::build::RepoBuilder;
 
 use crate::cli::{Command, SubCommand};
@@ -95,6 +95,15 @@ fn open_or_clone_repo(origin: &str, branch_name: &str) -> Result<Repository> {
     Ok(repo)
 }
 
+fn get_or_create_branch<'a>(repo: &'a Repository, branch_name: &str) -> Result<Branch<'a>> {
+    match repo.find_branch(branch_name, BranchType::Local) {
+        Ok(branch) => Ok(branch),
+        Err(_) => {
+            Ok(repo.branch(branch_name, &repo.head()?.peel_to_commit()?, false)?)
+        }
+    }
+}
+
 fn fetch_branch(repo: &Repository, branch_name: &str) -> Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username_from_url, _allowed_types| {
@@ -107,7 +116,8 @@ fn fetch_branch(repo: &Repository, branch_name: &str) -> Result<()> {
         .download_tags(AutotagOption::All);
 
     let mut remote = repo.find_remote("origin")?;
-    remote.fetch(&[branch_name], Some(&mut fetch_option), None)?;
+    get_or_create_branch(repo, branch_name)?;
+    remote.fetch(&[&format!("refs/heads/{0}:refs/heads/{0}", branch_name)], Some(&mut fetch_option), None)?;
     Ok(())
 }
 
