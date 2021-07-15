@@ -10,7 +10,7 @@ use crate::config::Configuration;
 use crate::error::{Error, Result};
 use crate::message::{CommitType, ConventionalMessage};
 use crate::report::build_report;
-use crate::utils::get_cache_folder;
+use crate::utils::get_repo_cache_folder;
 
 mod cli;
 mod config;
@@ -65,9 +65,7 @@ fn run() -> Result<()> {
 }
 
 fn open_or_clone_repo(origin: &str, branch_name: &str) -> Result<Repository> {
-    let name = origin.split('/').last().unwrap();
-    let mut path = get_cache_folder();
-    path.push(name);
+    let path = get_repo_cache_folder(origin);
 
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username_from_url, _allowed_types| {
