@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
+use std::fmt::Write;
 
 use clap::Clap;
 use git2::{AutotagOption, Branch, BranchType, Cred, FetchOptions, RemoteCallbacks, Repository, Revwalk};
 use git2::build::RepoBuilder;
+use rayon::prelude::*;
 
 use crate::cli::{Command, SubCommand};
 use crate::config::Configuration;
@@ -44,20 +46,28 @@ fn run() -> Result<()> {
         SubCommand::Projects(subcmd) => {
             let config = Configuration::from_file(subcmd.config_file)?;
             println!();
-            for project in &config.projects {
-                let branch_name = project.branch.as_ref().unwrap_or(&config.default_branch);
-                let repo = open_or_clone_repo(&project.origin, branch_name)?;
-                fetch_branch(&repo, branch_name)?;
-                println!("================================================================================\n");
-                println!("# Project: {}\n", project.name);
-                let resume = resume_repo(
-                    repo,
-                    &project.branch.as_ref().unwrap_or(&config.default_branch),
-                )?;
-
-                println!("{}", resume);
+            let reports = config.projects.par_iter()
+                .map(|project| -> Result<String> {
+                    let branch_name = project.branch.as_ref().unwrap_or(&config.default_branch);
+                    let repo = open_or_clone_repo(&project.origin, branch_name)?;
+                    fetch_branch(&repo, branch_name)?;
+                    let mut report = String::new();
+                    {
+                        let output = &mut report;
+                        writeln!(output, "# Project: {}\n", project.name).unwrap();
+                        let resume = resume_repo(
+                            repo,
+                            &project.branch.as_ref().unwrap_or(&config.default_branch),
+                        )?;
+                        writeln!(output, "{}", resume).unwrap();
+                        writeln!(output, "================================================================================\n").unwrap();
+                    }
+                    Ok(report)
+                })
+                .collect::<Vec<_>>();
+            for report in reports.into_iter().flatten() {
+                println!("{}", report);
             }
-            println!("================================================================================\n");
         }
     }
 
