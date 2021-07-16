@@ -6,7 +6,6 @@ use std::fmt::Formatter;
 pub enum Error {
     Git(git2::Error),
     IO(std::io::Error),
-    BranchDoesntExist(String, git2::Error),
     Configuration(YamlErrorWrapper),
     Format(std::fmt::Error),
 }
@@ -18,7 +17,6 @@ impl fmt::Display for Error {
         match self {
             Self::Git(_) => write!(f, "git error"),
             Self::IO(_) => write!(f, "I/O error"),
-            Self::BranchDoesntExist(name, _) => write!(f, "Branch {} doesn't exist", name),
             Self::Configuration(_) => write!(f, "Invalid configuration"),
             Self::Format(_) => write!(f, "Formatting error"),
         }
@@ -30,7 +28,6 @@ impl StdError for Error {
         match self {
             Self::Git(source) => Some(source),
             Self::IO(source) => Some(source),
-            Self::BranchDoesntExist(_, source) => Some(source),
             Self::Configuration(source) => Some(source),
             Self::Format(source) => Some(source),
         }
