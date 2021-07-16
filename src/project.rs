@@ -1,12 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use git2::build::RepoBuilder;
-use git2::{Branch, BranchType, Cred, FetchOptions, RemoteCallbacks, Repository, Revwalk};
+use git2::{Branch, BranchType, Cred, FetchOptions, Oid, RemoteCallbacks, Repository, Revwalk};
 
 use crate::changelog::ChangeLog;
 use crate::message::ConventionalMessage;
 use crate::{error::Result, utils::get_repo_cache_folder};
 use std::path::PathBuf;
+
+pub type Sentinels = HashSet<Oid>;
 
 pub struct Project {
     pub name: String,
@@ -90,18 +92,25 @@ impl Project {
         Ok(())
     }
 
-    pub fn build_walker(&self, branch_name: &str) -> Result<Revwalk> {
-        let mut walker = self.repository.revwalk()?;
+    pub fn build_walker(&self, branch_name: &str, sentinels: &Sentinels) -> Result<Revwalk> {
         let branch = self.get_branch(branch_name)?;
+        let mut walker = self.repository.revwalk()?;
         walker.push(branch.get().target().expect("Branch must point somewhere"))?;
+        for oid in sentinels {
+            walker.hide(*oid).unwrap();
+        }
         Ok(walker)
     }
 
-    pub fn build_changelog(&self, walker: Revwalk) -> ChangeLog {
+    pub fn build_changelog(&self, walker: Revwalk) -> (ChangeLog, Sentinels) {
         let mut changelog = HashMap::new();
+        let mut new_sentinels = Sentinels::new();
 
         for object in walker {
             let commit = self.repository.find_commit(object.unwrap()).unwrap();
+            if commit.parent_count() > 1 {
+                new_sentinels.insert(commit.id());
+            }
             if let Some(raw_message) = commit.message() {
                 if let Ok(message) = raw_message.parse::<ConventionalMessage>() {
                     let list = changelog
@@ -112,6 +121,6 @@ impl Project {
             }
         }
 
-        changelog
+        (changelog, new_sentinels)
     }
 }
