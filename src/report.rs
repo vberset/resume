@@ -1,9 +1,9 @@
 use std::fmt::Write;
 
 use crate::{
-    ChangeLog,
     error::Result,
     message::{CommitType, ConventionalMessage},
+    ChangeLog,
 };
 
 pub fn build_report<W: Write>(output: &mut W, changelog: &ChangeLog) -> Result<()> {
