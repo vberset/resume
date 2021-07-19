@@ -1,12 +1,16 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
-use git2::build::RepoBuilder;
-use git2::{Branch, BranchType, Cred, FetchOptions, Oid, RemoteCallbacks, Repository, Revwalk};
+use git2::{
+    build::RepoBuilder, Branch, BranchType, Cred, FetchOptions, Oid, RemoteCallbacks, Repository,
+    Revwalk,
+};
 
-use crate::changelog::ChangeLog;
-use crate::message::ConventionalMessage;
-use crate::{error::Result, utils::get_repo_cache_folder};
-use std::path::PathBuf;
+use crate::{
+    changelog::ChangeLog, error::Result, message::ConventionalMessage, utils::get_repo_cache_folder,
+};
 
 pub type Sentinels = HashSet<Oid>;
 
