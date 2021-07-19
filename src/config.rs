@@ -26,6 +26,20 @@ impl Configuration {
         let reader = BufReader::new(file);
         Ok(serde_yaml::from_reader(reader)?)
     }
+
+    pub fn get_branch_name_max_len(&self) -> usize {
+        self.projects
+            .iter()
+            .map(|projet| projet.name.len())
+            .max()
+            .unwrap_or(0)
+    }
+}
+
+impl Project {
+    pub fn get_branches_name(&self, default: &[String]) -> Vec<String> {
+        self.branches.as_deref().unwrap_or(default).to_owned()
+    }
 }
 
 fn default_branch() -> String {

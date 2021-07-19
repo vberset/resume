@@ -70,13 +70,8 @@ fn process_repository(repository: &str, branch_name: &str) -> Result<()> {
 fn process_projects(config: Configuration) -> Result<()> {
     let bars = MultiProgress::new();
 
-    let name_max_len = config
-        .projects
-        .iter()
-        .map(|projet| projet.name.len())
-        .max()
-        .unwrap();
-    let spinner_style = ProgressStyle::default_spinner()
+    let name_max_len = config.get_branch_name_max_len();
+    let bar_style = ProgressStyle::default_spinner()
         .tick_chars("⠈⠐⠠⢀⡀⠄⠂⠁ ")
         .template(&format!(
             "{{prefix:>{}.bold}} [{{pos}}/{{len}}] {{spinner}} {{wide_msg}} [{{elapsed}}]",
@@ -94,11 +89,7 @@ fn process_projects(config: Configuration) -> Result<()> {
             .projects
             .par_iter()
             .map_with(tx.clone(), |tx, project| -> Result<String> {
-                let branches_name = project
-                    .branches
-                    .as_ref()
-                    .unwrap_or(&default_branches_name)
-                    .to_owned();
+                let branches_name = project.get_branches_name(&default_branches_name);
 
                 let steps = 1 + (branches_name.len() as u64) * 2;
                 let bar = ProgressBar::new(steps);
@@ -106,7 +97,7 @@ fn process_projects(config: Configuration) -> Result<()> {
                 // wait a little to let the MultiProgress processes the message
                 // otherwise display non-styled,  non-managed, bars
                 sleep(Duration::from_millis(10));
-                bar.set_style(spinner_style.clone());
+                bar.set_style(bar_style.clone());
                 bar.set_prefix(project.name.to_owned());
                 bar.set_message("pending");
                 bar.enable_steady_tick(100);
