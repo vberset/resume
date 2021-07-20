@@ -18,6 +18,7 @@ pub struct Project {
     pub name: String,
     pub origin: String,
     pub branches: Option<Vec<String>>,
+    pub team: Option<String>,
 }
 
 impl Configuration {
@@ -63,6 +64,7 @@ projects:
                 name: "repo".to_string(),
                 origin: "git@example.com:user/repository.git".to_string(),
                 branches: None,
+                team: None,
             }],
         };
         let output = serde_yaml::from_str(input).unwrap();
@@ -78,6 +80,7 @@ projects:
     branches:
       - foo
       - bar
+    team: X functional
 "#;
         let expected = Configuration {
             default_branch: "master".to_string(),
@@ -85,6 +88,7 @@ projects:
                 name: "repo".to_string(),
                 origin: "git@example.com:user/repository.git".to_string(),
                 branches: Some(vec!["foo".to_string(), "bar".to_string()]),
+                team: Some("X functional".to_string()),
             }],
         };
         let ouput = serde_yaml::from_str(input).unwrap();

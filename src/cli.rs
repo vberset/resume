@@ -20,6 +20,8 @@ pub struct Repository {
     pub repository: String,
     #[clap(short, long, default_value = "master")]
     pub branch: String,
+    #[clap(short, long)]
+    pub team: Option<String>,
 }
 
 #[derive(Clap, Debug)]

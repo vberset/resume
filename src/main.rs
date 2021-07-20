@@ -45,7 +45,7 @@ fn run() -> Result<()> {
 
     match command.sub_command {
         SubCommand::Repository(subcmd) => {
-            process_repository(&subcmd.repository, &subcmd.branch)?;
+            process_repository(&subcmd.repository, &subcmd.branch, subcmd.team.to_owned())?;
         }
         SubCommand::Projects(subcmd) => {
             let config = Configuration::from_file(subcmd.config_file)?;
@@ -56,8 +56,9 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn process_repository(repository: &str, branch_name: &str) -> Result<()> {
-    let project = Project::from_standalone_repository(repository, &[branch_name.to_owned()])?;
+fn process_repository(repository: &str, branch_name: &str, team: Option<String>) -> Result<()> {
+    let mut project = Project::from_standalone_repository(repository, &[branch_name.to_owned()])?;
+    project.team = team;
     let mut report = format!("# Project: {}\n\n", project.name);
     let sentinels = Sentinels::new();
     let walker = project.build_walker(&branch_name, &sentinels)?;
@@ -88,8 +89,8 @@ fn process_projects(config: Configuration) -> Result<()> {
         config
             .projects
             .par_iter()
-            .map_with(tx.clone(), |tx, project| -> Result<String> {
-                let branches_name = project.get_branches_name(&default_branches_name);
+            .map_with(tx.clone(), |tx, cfg_project| -> Result<String> {
+                let branches_name = cfg_project.get_branches_name(&default_branches_name);
 
                 let steps = 1 + (branches_name.len() as u64) * 2;
                 let bar = ProgressBar::new(steps);
@@ -98,18 +99,25 @@ fn process_projects(config: Configuration) -> Result<()> {
                 // otherwise display non-styled,  non-managed, bars
                 sleep(Duration::from_millis(10));
                 bar.set_style(bar_style.clone());
-                bar.set_prefix(project.name.to_owned());
+                bar.set_prefix(cfg_project.name.to_owned());
                 bar.set_message("pending");
                 bar.enable_steady_tick(100);
-                bar.set_message(format!("try to open cached repository: {}", project.origin));
-                let project = if let Ok(project) =
-                    Project::from_cache(&project.name, &project.origin, &branches_name)
+                bar.set_message(format!(
+                    "try to open cached repository: {}",
+                    cfg_project.origin
+                ));
+
+                let team = cfg_project.team.clone();
+
+                let mut project = if let Ok(project) =
+                    Project::from_cache(&cfg_project.name, &cfg_project.origin, &branches_name)
                 {
                     project
                 } else {
-                    bar.set_message(format!("clone repository: {}", project.origin));
-                    Project::from_remote(&project.name, &project.origin, &branches_name)?
+                    bar.set_message(format!("clone repository: {}", cfg_project.origin));
+                    Project::from_remote(&cfg_project.name, &cfg_project.origin, &branches_name)?
                 };
+                project.team = team;
                 bar.inc(1);
 
                 for branch_name in &project.branches_name {

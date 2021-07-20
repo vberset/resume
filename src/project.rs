@@ -18,6 +18,7 @@ pub struct Project {
     pub name: String,
     repository: Repository,
     pub branches_name: Vec<String>,
+    pub team: Option<String>,
 }
 
 impl Project {
@@ -29,6 +30,7 @@ impl Project {
             name,
             repository,
             branches_name: branches_name.to_vec(),
+            team: None,
         })
     }
 
@@ -39,6 +41,7 @@ impl Project {
             name: name.to_string(),
             repository: repo,
             branches_name: branches_name.to_vec(),
+            team: None,
         })
     }
 
@@ -54,6 +57,7 @@ impl Project {
             name: name.to_string(),
             repository: repo,
             branches_name: branches_name.to_vec(),
+            team: None,
         })
     }
 
@@ -117,10 +121,23 @@ impl Project {
             }
             if let Some(raw_message) = commit.message() {
                 if let Ok(message) = raw_message.parse::<ConventionalMessage>() {
-                    let list = changelog
-                        .entry(message.ctype.clone())
-                        .or_insert_with(Vec::new);
-                    list.push(message);
+                    if let Some(team) = self.team.as_ref() {
+                        if message
+                            .trailers
+                            .iter()
+                            .any(|(key, value)| key == "team" && value == team)
+                        {
+                            let list = changelog
+                                .entry(message.ctype.clone())
+                                .or_insert_with(Vec::new);
+                            list.push(message);
+                        }
+                    } else {
+                        let list = changelog
+                            .entry(message.ctype.clone())
+                            .or_insert_with(Vec::new);
+                        list.push(message);
+                    }
                 }
             }
         }
