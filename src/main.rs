@@ -45,7 +45,7 @@ fn run() -> Result<()> {
 
     match command.sub_command {
         SubCommand::Repository(subcmd) => {
-            process_repository(&subcmd.repository, &subcmd.branch, subcmd.team.to_owned())?;
+            process_repository(&subcmd.repository, &subcmd.branches, subcmd.team.to_owned())?;
         }
         SubCommand::Projects(subcmd) => {
             let config = Configuration::from_file(subcmd.config_file)?;
@@ -56,14 +56,21 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn process_repository(repository: &str, branch_name: &str, team: Option<String>) -> Result<()> {
-    let mut project = Project::from_standalone_repository(repository, &[branch_name.to_owned()])?;
+fn process_repository(
+    repository: &str,
+    branches_name: &[String],
+    team: Option<String>,
+) -> Result<()> {
+    let mut project = Project::from_standalone_repository(repository, branches_name)?;
     project.team = team;
     let mut report = format!("# Project: {}\n\n", project.name);
-    let sentinels = Sentinels::new();
-    let walker = project.build_walker(&branch_name, &sentinels)?;
-    let (changelog, _) = project.build_changelog(walker);
-    build_report(&mut report, &changelog)?;
+    let mut sentinels = Sentinels::new();
+    for branch_name in &project.branches_name {
+        let walker = project.build_walker(&branch_name, &sentinels)?;
+        let (changelog, new_sentinels) = project.build_changelog(walker);
+        sentinels.extend(new_sentinels);
+        build_report(&mut report, &changelog)?;
+    }
     print!("{}", report);
     Ok(())
 }

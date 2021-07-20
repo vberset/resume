@@ -18,8 +18,14 @@ pub enum SubCommand {
 #[derive(Clap, Debug)]
 pub struct Repository {
     pub repository: String,
-    #[clap(short, long, default_value = "master")]
-    pub branch: String,
+    #[clap(
+        short,
+        long("branch"),
+        max_values(1),
+        multiple(true),
+        default_value = "master"
+    )]
+    pub branches: Vec<String>,
     #[clap(short, long)]
     pub team: Option<String>,
 }
