@@ -162,7 +162,13 @@ impl SnapshotHistory {
     }
 
     pub fn push(&mut self, snapshot: Snapshot) {
-        self.snapshots.push(snapshot);
+        if self
+            .last()
+            .map(|last| last.hash != snapshot.hash)
+            .unwrap_or(true)
+        {
+            self.snapshots.push(snapshot);
+        }
     }
 }
 
