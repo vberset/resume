@@ -1,4 +1,5 @@
 /target
 /.idea
-.trigger
-resume.yaml
+/.trigger
+/resume.yaml
+/resume.state

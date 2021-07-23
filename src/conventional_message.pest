@@ -14,7 +14,9 @@ body = @{ text_block+ }
 
 token = { ident }
 value = { (!NEWLINE ~ ANY)* }
-trailer = { token ~ ": " ~ " "* ~ value ~ " "* }
+colon_trailer = _{ token ~ ":" ~ " "+ ~ value ~ " "* }
+hash_trailer = _{ token ~ " "+ ~ "#" ~ ident ~ " "* }
+trailer = { colon_trailer | hash_trailer }
 trailers = { NEWLINE{2,} ~ trailer ~ (NEWLINE ~ trailer)* ~ NEWLINE? ~ EOI }
 
 message = { headline ~ body? ~ trailers? }

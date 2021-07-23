@@ -8,6 +8,7 @@ use git2::{
     Revwalk,
 };
 
+use crate::snapshots::{BranchName, CommitHash, RepositoryOrigin, RepositorySnapshot};
 use crate::{
     changelog::ChangeLog, error::Result, message::ConventionalMessage, utils::get_repo_cache_folder,
 };
@@ -17,12 +18,13 @@ pub type Sentinels = HashSet<Oid>;
 pub struct Project {
     pub name: String,
     repository: Repository,
-    pub branches_name: Vec<String>,
+    pub branches_name: Vec<BranchName>,
     pub team: Option<String>,
+    pub snapshot: Option<RepositorySnapshot>,
 }
 
 impl Project {
-    pub fn from_standalone_repository(path: &str, branches_name: &[String]) -> Result<Self> {
+    pub fn from_standalone_repository(path: &str, branches_name: &[BranchName]) -> Result<Self> {
         let path = PathBuf::from(path).canonicalize()?;
         let name = path.file_name().unwrap().to_str().unwrap().to_owned();
         let repository = Repository::open(path)?;
@@ -31,10 +33,15 @@ impl Project {
             repository,
             branches_name: branches_name.to_vec(),
             team: None,
+            snapshot: None,
         })
     }
 
-    pub fn from_cache(name: &str, origin: &str, branches_name: &[String]) -> Result<Self> {
+    pub fn from_cache(
+        name: &str,
+        origin: &RepositoryOrigin,
+        branches_name: &[BranchName],
+    ) -> Result<Self> {
         let path = get_repo_cache_folder(origin);
         let repo = Repository::open(path)?;
         Ok(Self {
@@ -42,22 +49,28 @@ impl Project {
             repository: repo,
             branches_name: branches_name.to_vec(),
             team: None,
+            snapshot: None,
         })
     }
 
-    pub fn from_remote(name: &str, origin: &str, branches_name: &[String]) -> Result<Self> {
+    pub fn from_remote(
+        name: &str,
+        origin: &RepositoryOrigin,
+        branches_name: &[BranchName],
+    ) -> Result<Self> {
         let path = get_repo_cache_folder(origin);
 
         let repo = RepoBuilder::new()
             .fetch_options(Self::default_fetch_options())
             .bare(true)
-            .clone(origin, path.as_ref())?;
+            .clone(origin.as_str(), path.as_ref())?;
 
         Ok(Self {
             name: name.to_string(),
             repository: repo,
             branches_name: branches_name.to_vec(),
             team: None,
+            snapshot: None,
         })
     }
 
@@ -78,26 +91,30 @@ impl Project {
             .find_branch(branch_name, BranchType::Local)?)
     }
 
-    fn get_or_create_branch(&self, branch_name: &str) -> Result<Branch> {
-        match self.repository.find_branch(branch_name, BranchType::Local) {
+    fn get_or_create_branch(&self, branch_name: &BranchName) -> Result<Branch> {
+        match self
+            .repository
+            .find_branch(branch_name.as_str(), BranchType::Local)
+        {
             Ok(branch) => Ok(branch),
             Err(_) => Ok(self.repository.branch(
-                branch_name,
+                branch_name.as_str(),
                 &self.repository.head()?.peel_to_commit()?,
                 false,
             )?),
         }
     }
 
-    pub fn fetch_branch(&self, branch_name: &str) -> Result<()> {
+    /// Fetch the branch from origin and return the pointed commit ID
+    pub fn fetch_branch(&self, branch_name: &BranchName) -> Result<CommitHash> {
         let mut remote = self.repository.find_remote("origin")?;
-        self.get_or_create_branch(branch_name)?;
+        let branch = self.get_or_create_branch(branch_name)?;
         remote.fetch(
             &[&format!("refs/heads/{0}:refs/heads/{0}", branch_name)],
             Some(&mut Self::default_fetch_options()),
             None,
         )?;
-        Ok(())
+        Ok(branch.get().target().unwrap().into())
     }
 
     pub fn build_walker(&self, branch_name: &str, sentinels: &Sentinels) -> Result<Revwalk> {

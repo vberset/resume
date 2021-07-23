@@ -5,19 +5,20 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::error::Result;
+use crate::snapshots::{BranchName, RepositoryOrigin};
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct Configuration {
     #[serde(default = "default_branch")]
-    pub default_branch: String,
+    pub default_branch: BranchName,
     pub projects: Vec<Project>,
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct Project {
     pub name: String,
-    pub origin: String,
-    pub branches: Option<Vec<String>>,
+    pub origin: RepositoryOrigin,
+    pub branches: Option<Vec<BranchName>>,
     pub team: Option<String>,
 }
 
@@ -38,13 +39,13 @@ impl Configuration {
 }
 
 impl Project {
-    pub fn get_branches_name(&self, default: &[String]) -> Vec<String> {
+    pub fn get_branches_name(&self, default: &[BranchName]) -> Vec<BranchName> {
         self.branches.as_deref().unwrap_or(default).to_owned()
     }
 }
 
-fn default_branch() -> String {
-    "master".to_string()
+fn default_branch() -> BranchName {
+    "master".to_string().into()
 }
 
 #[cfg(test)]
@@ -59,10 +60,10 @@ projects:
     origin: git@example.com:user/repository.git
 "#;
         let expected = Configuration {
-            default_branch: "master".to_string(),
+            default_branch: "master".to_string().into(),
             projects: vec![Project {
                 name: "repo".to_string(),
-                origin: "git@example.com:user/repository.git".to_string(),
+                origin: "git@example.com:user/repository.git".to_string().into(),
                 branches: None,
                 team: None,
             }],
@@ -83,11 +84,11 @@ projects:
     team: X functional
 "#;
         let expected = Configuration {
-            default_branch: "master".to_string(),
+            default_branch: "master".to_string().into(),
             projects: vec![Project {
                 name: "repo".to_string(),
-                origin: "git@example.com:user/repository.git".to_string(),
-                branches: Some(vec!["foo".to_string(), "bar".to_string()]),
+                origin: "git@example.com:user/repository.git".to_string().into(),
+                branches: Some(vec!["foo".to_string().into(), "bar".to_string().into()]),
                 team: Some("X functional".to_string()),
             }],
         };
