@@ -17,7 +17,10 @@ use crate::{
     changelog::ChangeLog,
     cli::{Command, SubCommand},
     config::Configuration,
-    error::Result,
+    error::{
+        Error::{InvalidSnapshotRef, SnapshotDoesntExist},
+        Result,
+    },
     project::{Project, Sentinels},
     report::build_report,
 };
@@ -58,10 +61,24 @@ fn run() -> Result<()> {
             let mut history = SnapshotHistory::from_file(&subcmd.state_file)
                 .unwrap_or_else(|_| SnapshotHistory::new());
 
-            let snapshot = if subcmd.load_state {
-                history.last().cloned()
-            } else {
+            let snapshot = if subcmd.no_state {
                 None
+            } else if let Some(snapshot_ref) = &subcmd.from_snapshot {
+                let snapshot = if let Ok(index) = snapshot_ref.parse() {
+                    history.get_by_index(index).cloned()
+                } else if let Ok(hash) = snapshot_ref.parse().as_ref() {
+                    history.get_by_hash(hash).cloned()
+                } else {
+                    return Err(InvalidSnapshotRef(snapshot_ref.to_owned()));
+                };
+
+                if snapshot.is_none() {
+                    return Err(SnapshotDoesntExist(snapshot_ref.to_owned()));
+                }
+
+                snapshot
+            } else {
+                history.last().cloned()
             };
 
             let snapshot = process_projects(config, snapshot)?;

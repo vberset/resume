@@ -36,10 +36,12 @@ pub struct Repository {
 pub struct Projects {
     #[clap(default_value = "resume.yaml")]
     pub config_file: String,
-    #[clap(short('f'), long, default_value = "resume.state")]
+    #[clap(long, default_value = "resume.state")]
     pub state_file: String,
-    #[clap(short, long)]
-    pub load_state: bool,
+    #[clap(long)]
+    pub no_state: bool,
     #[clap(short, long)]
     pub save_state: bool,
+    #[clap(short, long)]
+    pub from_snapshot: Option<String>,
 }

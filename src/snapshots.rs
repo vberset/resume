@@ -102,6 +102,20 @@ impl fmt::Display for RepositoryOrigin {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
 pub struct SnapshotHash(String);
 
+impl From<String> for SnapshotHash {
+    fn from(string: String) -> Self {
+        Self(string)
+    }
+}
+
+impl FromStr for SnapshotHash {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(s.to_owned().into())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SnapshotHistory {
     snapshots: Vec<Snapshot>,

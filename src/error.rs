@@ -4,6 +4,8 @@ use std::fmt::Formatter;
 
 #[derive(Debug)]
 pub enum Error {
+    SnapshotDoesntExist(String),
+    InvalidSnapshotRef(String),
     Git(git2::Error),
     IO(std::io::Error),
     Configuration(YamlErrorWrapper),
@@ -15,6 +17,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::SnapshotDoesntExist(reference) => {
+                write!(f, "the snapshot '{}' doesn't exist", reference)
+            }
+            Self::InvalidSnapshotRef(reference) => {
+                write!(f, "'{}' is not a valid snapshot reference", reference)
+            }
             Self::Git(_) => write!(f, "git error"),
             Self::IO(_) => write!(f, "I/O error"),
             Self::Configuration(_) => write!(f, "Invalid configuration"),
@@ -26,6 +34,8 @@ impl fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
+            Self::SnapshotDoesntExist(_) => None,
+            Self::InvalidSnapshotRef(_) => None,
             Self::Git(source) => Some(source),
             Self::IO(source) => Some(source),
             Self::Configuration(source) => Some(source),
