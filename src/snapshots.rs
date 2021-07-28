@@ -123,7 +123,7 @@ pub struct SnapshotHistory {
 
 impl SnapshotHash {
     pub fn from_hash(hash: Hash) -> Self {
-        Self(hash.to_hex().as_str().to_owned())
+        Self(hash.to_string())
     }
 }
 

@@ -24,6 +24,6 @@ pub fn get_cache_folder() -> PathBuf {
 
 pub fn get_repo_cache_folder(origin: &RepositoryOrigin) -> PathBuf {
     let mut path = get_cache_folder();
-    path.push(hash(origin.as_bytes()).to_hex().as_str());
+    path.push(hash(origin.as_bytes()).to_string());
     path
 }
