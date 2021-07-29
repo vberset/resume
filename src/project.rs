@@ -8,13 +8,15 @@ use git2::{
     Revwalk,
 };
 
-use crate::snapshots::{BranchName, CommitHash, RepositoryOrigin, RepositorySnapshot};
 use crate::{
     changelog::ChangeLog, error::Result, message::ConventionalMessage, utils::get_repo_cache_folder,
+    snapshots::{BranchName, CommitHash, RepositoryOrigin, RepositorySnapshot},
 };
 
+/// Set of commits to not travers
 pub type Sentinels = HashSet<Oid>;
 
+/// Project groups a repository and info to traverse its history.
 pub struct Project {
     pub name: String,
     repository: Repository,
@@ -24,6 +26,7 @@ pub struct Project {
 }
 
 impl Project {
+    /// Build a Project from a repository from the file system
     pub fn from_standalone_repository(path: &str, branches_name: &[BranchName]) -> Result<Self> {
         let path = PathBuf::from(path).canonicalize()?;
         let name = path.file_name().unwrap().to_str().unwrap().to_owned();
@@ -37,6 +40,7 @@ impl Project {
         })
     }
 
+    /// Build a Project from a cached clone
     pub fn from_cache(
         name: &str,
         origin: &RepositoryOrigin,
@@ -53,6 +57,7 @@ impl Project {
         })
     }
 
+    /// Clone the repository from the given origin then build a Project
     pub fn from_remote(
         name: &str,
         origin: &RepositoryOrigin,
@@ -74,6 +79,7 @@ impl Project {
         })
     }
 
+    /// Build default `FetchOptions`, with credentials' callback, etc
     fn default_fetch_options() -> FetchOptions<'static> {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
@@ -85,12 +91,14 @@ impl Project {
         fetch_option
     }
 
+    /// Get the `Branch` object from the given branch name
     fn get_branch(&self, branch_name: &str) -> Result<Branch> {
         Ok(self
             .repository
             .find_branch(branch_name, BranchType::Local)?)
     }
 
+    /// Get the `Branch` object from the given branch name. Create the branche if needed.
     fn get_or_create_branch(&self, branch_name: &BranchName) -> Result<Branch> {
         match self
             .repository
@@ -117,6 +125,7 @@ impl Project {
         Ok(branch.get().target().unwrap().into())
     }
 
+    /// Build a commits walker. Its path is bound by the `sentinels` set of commits.
     pub fn build_walker(&self, branch_name: &str, sentinels: &Sentinels) -> Result<Revwalk> {
         let branch = self.get_branch(branch_name)?;
         let mut walker = self.repository.revwalk()?;

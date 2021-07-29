@@ -22,6 +22,7 @@ pub fn get_cache_folder() -> PathBuf {
     path
 }
 
+/// Get the user's cache folder where store the given repository origin
 pub fn get_repo_cache_folder(origin: &RepositoryOrigin) -> PathBuf {
     let mut path = get_cache_folder();
     path.push(hash(origin.as_bytes()).to_string());
