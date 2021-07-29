@@ -1,14 +1,46 @@
+use std::fmt;
 use std::str::FromStr;
 
 use pest::Parser;
 use pest_derive::Parser;
+use std::fmt::Formatter;
+
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+pub struct CommitScope(String);
+
+impl From<String> for CommitScope {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl FromStr for CommitScope {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_owned()))
+    }
+}
+
+impl AsRef<str> for CommitScope {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl fmt::Display for CommitScope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_ref())
+    }
+}
+
 
 /// Parsed commit message following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 /// convention.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConventionalMessage {
     pub ctype: CommitType,
-    pub scope: Option<String>,
+    pub scope: Option<CommitScope>,
     pub is_breaking: bool,
     pub summary: String,
     pub body: Option<String>,
@@ -62,7 +94,7 @@ impl FromStr for ConventionalMessage {
                             Rule::ctype => {
                                 message.ctype = pair.as_str().parse().expect("unfailable")
                             }
-                            Rule::scope => message.scope = Some(pair.as_str().to_owned()),
+                            Rule::scope => message.scope = Some(pair.as_str().parse().unwrap()),
                             Rule::summary => message.summary = pair.as_str().to_owned(),
                             Rule::break_mark => message.is_breaking = true,
                             _ => unreachable!(),
@@ -172,7 +204,7 @@ mod test {
     fn test_parse_message_with_all_syntaxes() {
         let expected = ConventionalMessage {
             ctype: CommitType::BugFix,
-            scope: Some("scope".to_string()),
+            scope: Some("scope".parse().unwrap()),
             is_breaking: true,
             summary: "the summary".to_string(),
             body: Some("Some body content\n\n\nmultiple\nlines\nblock".to_string()),
