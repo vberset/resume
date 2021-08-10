@@ -1,42 +1,19 @@
-use std::fmt::Write;
+use std::str::FromStr;
 
-use crate::{
-    error::Result,
-    message::{CommitType, ConventionalMessage},
-    ChangeLog,
-};
+use crate::error::{Error, Result};
 
-pub fn build_report<W: Write>(output: &mut W, changelog: &ChangeLog) -> Result<()> {
-    let categories = [
-        (CommitType::Feature, '✨', "New Features"),
-        (CommitType::BugFix, '🐛', "Bug Fixes"),
-        (CommitType::Refactoring, '♻', "Refactoring"),
-    ];
-
-    for category in categories {
-        if let Some(messages) = changelog.get(&category.0) {
-            format_category(output, category.1, category.2, messages)?;
-        }
-    }
-
-    Ok(())
+#[derive(Debug, Eq, PartialEq)]
+pub enum OutputType {
+    Yaml,
 }
 
-fn format_category<W: Write>(
-    output: &mut W,
-    emoji: char,
-    title: &str,
-    messages: &[ConventionalMessage],
-) -> Result<()> {
-    writeln!(output, "    {}️ {}\n", emoji, title)?;
-    for message in messages {
-        writeln!(
-            output,
-            "       - {} {}",
-            if message.is_breaking { "💥 " } else { "" },
-            message.summary
-        )?;
+impl FromStr for OutputType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "yaml" => Ok(OutputType::Yaml),
+            _ => Err(Error::OutputType(s.to_string())),
+        }
     }
-    writeln!(output)?;
-    Ok(())
 }

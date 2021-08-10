@@ -1,9 +1,13 @@
-use std::error::Error as StdError;
-use std::fmt;
-use std::fmt::Formatter;
+use std::{
+    error::Error as StdError,
+    fmt::{self, Formatter},
+};
 
 #[derive(Debug)]
 pub enum Error {
+    InvalidSelector(String),
+    InvalidIndex(String),
+    OutputType(String),
     SnapshotDoesntExist(String),
     InvalidSnapshotRef(String),
     Git(git2::Error),
@@ -17,6 +21,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidSelector(selector) => {
+                write!(f, "invalid selector {}", selector)
+            }
+            Self::InvalidIndex(index) => {
+                write!(f, "invalid index {}", index)
+            }
+            Self::OutputType(format) => {
+                write!(f, "invalid output type '{}'", format)
+            }
             Self::SnapshotDoesntExist(reference) => {
                 write!(f, "the snapshot '{}' doesn't exist", reference)
             }
@@ -34,12 +47,11 @@ impl fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
-            Self::SnapshotDoesntExist(_) => None,
-            Self::InvalidSnapshotRef(_) => None,
             Self::Git(source) => Some(source),
             Self::IO(source) => Some(source),
             Self::Configuration(source) => Some(source),
             Self::Format(source) => Some(source),
+            _ => None,
         }
     }
 }

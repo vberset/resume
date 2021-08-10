@@ -1,20 +1,20 @@
 use std::{
     error::Error as StdError,
-    fmt::Write,
     sync::mpsc::channel,
     thread::{sleep, spawn},
     time::Duration,
 };
 
 use clap::Clap;
+use git2::Oid;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
+use crate::changelog::{ChangeLog, ChangeLogEntry, CommitField};
 use crate::snapshots::{
     BranchName, RepositoryOrigin, RepositorySnapshot, Snapshot, SnapshotBuilder, SnapshotHistory,
 };
 use crate::{
-    changelog::ChangeLog,
     cli::{Command, SubCommand},
     config::Configuration,
     error::{
@@ -22,9 +22,8 @@ use crate::{
         Result,
     },
     project::{Project, Sentinels},
-    report::build_report,
+    report::OutputType,
 };
-use git2::Oid;
 
 mod changelog;
 mod cli;
@@ -51,9 +50,24 @@ fn main() {
 fn run() -> Result<()> {
     let command = Command::parse();
 
+    if command.verbose {
+        simple_logger::init_with_level(log::Level::Info).unwrap();
+    } else {
+        simple_logger::init_with_level(log::Level::Warn).unwrap();
+    }
+
     match &command.sub_command {
         SubCommand::Repository(subcmd) => {
-            process_repository(&subcmd.repository, &subcmd.branches, subcmd.team.to_owned())?;
+            let change_log = process_repository(
+                &subcmd.repository,
+                subcmd.group_by.clone(),
+                &subcmd.branches,
+                subcmd.team.to_owned(),
+            )?;
+
+            if command.output == OutputType::Yaml {
+                println!("{}", change_log.to_yaml()?);
+            }
         }
         SubCommand::Projects(subcmd) => {
             let config = Configuration::from_file(&subcmd.config_file)?;
@@ -81,11 +95,19 @@ fn run() -> Result<()> {
                 history.last().cloned()
             };
 
-            let snapshot = process_projects(config, snapshot)?;
+            let (change_log_entries, snapshot) = process_projects(config, snapshot)?;
 
             if subcmd.save_state {
                 history.push(snapshot);
                 history.to_file(&subcmd.state_file)?;
+            }
+
+            let mut change_log = ChangeLog::new(subcmd.group_by.to_owned());
+            for change_log_entry in change_log_entries.into_iter() {
+                change_log.insert(change_log_entry)?;
+            }
+            if command.output == OutputType::Yaml {
+                println!("{}", change_log.to_yaml()?);
             }
         }
     }
@@ -95,24 +117,33 @@ fn run() -> Result<()> {
 
 fn process_repository(
     repository: &str,
+    order_by: Vec<CommitField>,
     branches_name: &[BranchName],
     team: Option<String>,
-) -> Result<()> {
+) -> Result<ChangeLog> {
     let mut project = Project::from_standalone_repository(repository, branches_name)?;
     project.team = team;
-    let mut report = format!("# Project: {}\n\n", project.name);
     let mut sentinels = Sentinels::new();
+    let mut change_log = ChangeLog::new(order_by);
     for branch_name in &project.branches_name {
         let walker = project.build_walker(branch_name.as_str(), &sentinels)?;
-        let (changelog, new_sentinels) = project.build_changelog(walker);
+        let (change_log_entries, new_sentinels) = project.extract_messages(walker);
         sentinels.extend(new_sentinels);
-        build_report(&mut report, &changelog)?;
+        for entry in change_log_entries {
+            change_log.insert(ChangeLogEntry::new(
+                "".to_string().into(),
+                branch_name.to_owned(),
+                entry,
+            ))?;
+        }
     }
-    print!("{}", report);
-    Ok(())
+    Ok(change_log)
 }
 
-fn process_projects(config: Configuration, snapshot: Option<Snapshot>) -> Result<Snapshot> {
+fn process_projects(
+    config: Configuration,
+    snapshot: Option<Snapshot>,
+) -> Result<(Vec<ChangeLogEntry>, Snapshot)> {
     let bars = MultiProgress::new();
 
     let name_max_len = config.get_branch_name_max_len();
@@ -134,7 +165,9 @@ fn process_projects(config: Configuration, snapshot: Option<Snapshot>) -> Result
             .par_iter()
             .map_with(
                 tx_bars.clone(),
-                |tx_bars, cfg_project| -> Result<(String, RepositoryOrigin, RepositorySnapshot)> {
+                |tx_bars,
+                 cfg_project|
+                 -> Result<(Vec<ChangeLogEntry>, RepositoryOrigin, RepositorySnapshot)> {
                     let branches_name = cfg_project.get_branches_name(&default_branches_name);
 
                     let steps = 1 + (branches_name.len() as u64) * 2;
@@ -173,20 +206,19 @@ fn process_projects(config: Configuration, snapshot: Option<Snapshot>) -> Result
                     bar.inc(1);
 
                     let mut repo_snapshot = RepositorySnapshot::new();
+                    let mut change_sets = Vec::new();
                     for branch_name in &project.branches_name {
                         bar.set_message(format!("fetch branch: {}", &branch_name));
-                        let hash = project.fetch_branch(&branch_name)?;
+                        let hash = project.fetch_branch(branch_name)?;
                         repo_snapshot.insert(branch_name.clone(), hash);
                         bar.inc(1);
                     }
 
-                    let mut report = format!("# Project: {}\n\n", project.name);
-
-                    report_branches(&bar, &project, &mut report)?;
+                    change_sets.extend(report_branches(&bar, &project)?);
 
                     bar.set_message("done");
                     bar.finish();
-                    Ok((report, cfg_project.origin.clone(), repo_snapshot))
+                    Ok((change_sets, cfg_project.origin.clone(), repo_snapshot))
                 },
             )
             .collect::<Vec<_>>()
@@ -198,18 +230,20 @@ fn process_projects(config: Configuration, snapshot: Option<Snapshot>) -> Result
     let results = handle.join().unwrap();
 
     let mut builder = SnapshotBuilder::new();
+    let mut all_change_sets = Vec::new();
 
     for result in results {
-        let (report, origin, repo_snapshot) = result?;
+        let (change_sets, origin, repo_snapshot) = result?;
         builder.add_repository_snapshot(origin, repo_snapshot);
-        println!("{}", report);
+        all_change_sets.extend(change_sets);
     }
 
-    Ok(builder.build())
+    Ok((all_change_sets, builder.build()))
 }
 
-fn report_branches<W: Write>(bar: &ProgressBar, project: &Project, report: &mut W) -> Result<()> {
+fn report_branches(bar: &ProgressBar, project: &Project) -> Result<Vec<ChangeLogEntry>> {
     let mut sentinels = Sentinels::new();
+    let mut entries = Vec::new();
     for branch_name in &project.branches_name {
         bar.set_message(format!("traverse branch {}", branch_name));
         if let Some(Some(head)) = project
@@ -220,13 +254,16 @@ fn report_branches<W: Write>(bar: &ProgressBar, project: &Project, report: &mut 
             sentinels.insert(Oid::from_str(head.as_str())?);
         }
         let walker = project.build_walker(branch_name.as_str(), &sentinels)?;
-        let (changelog, new_sentinels) = project.build_changelog(walker);
+        let (messages, new_sentinels) = project.extract_messages(walker);
+        entries.extend(messages.into_iter().map(|message| {
+            ChangeLogEntry::new(
+                project.get_origin().unwrap(),
+                branch_name.to_owned(),
+                message,
+            )
+        }));
         sentinels.extend(&new_sentinels);
-        if !changelog.is_empty() {
-            writeln!(report, "  ## branch: {}\n", branch_name).unwrap();
-            build_report(report, &changelog)?;
-        }
         bar.inc(1);
     }
-    Ok(())
+    Ok(entries)
 }

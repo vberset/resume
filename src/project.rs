@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use git2::{
     build::RepoBuilder, Branch, BranchType, Cred, FetchOptions, Oid, RemoteCallbacks, Repository,
@@ -9,8 +6,11 @@ use git2::{
 };
 
 use crate::{
-    changelog::ChangeLog, error::Result, message::ConventionalMessage, utils::get_repo_cache_folder,
+    // changelog::ChangeSet,
+    error::Result,
+    message::ConventionalMessage,
     snapshots::{BranchName, CommitHash, RepositoryOrigin, RepositorySnapshot},
+    utils::get_repo_cache_folder,
 };
 
 /// Set of commits to not travers
@@ -98,6 +98,14 @@ impl Project {
             .find_branch(branch_name, BranchType::Local)?)
     }
 
+    pub fn get_origin(&self) -> Result<RepositoryOrigin> {
+        Ok(RepositoryOrigin::from(
+            self.repository
+                .find_remote("origin")
+                .map(|ref remote| remote.url().unwrap_or("").to_string())?,
+        ))
+    }
+
     /// Get the `Branch` object from the given branch name. Create the branche if needed.
     fn get_or_create_branch(&self, branch_name: &BranchName) -> Result<Branch> {
         match self
@@ -136,8 +144,8 @@ impl Project {
         Ok(walker)
     }
 
-    pub fn build_changelog(&self, walker: Revwalk) -> (ChangeLog, Sentinels) {
-        let mut changelog = HashMap::new();
+    pub fn extract_messages(&self, walker: Revwalk) -> (Vec<ConventionalMessage>, Sentinels) {
+        let mut messages = Vec::new();
         let mut new_sentinels = Sentinels::new();
 
         for object in walker {
@@ -153,21 +161,15 @@ impl Project {
                             .iter()
                             .any(|(key, value)| key == "team" && value == team)
                         {
-                            let list = changelog
-                                .entry(message.ctype.clone())
-                                .or_insert_with(Vec::new);
-                            list.push(message);
+                            messages.push(message)
                         }
                     } else {
-                        let list = changelog
-                            .entry(message.ctype.clone())
-                            .or_insert_with(Vec::new);
-                        list.push(message);
+                        messages.push(message);
                     }
                 }
             }
         }
 
-        (changelog, new_sentinels)
+        (messages, new_sentinels)
     }
 }

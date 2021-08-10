@@ -1,12 +1,20 @@
 use std::fmt;
+use std::fmt::Formatter;
 use std::str::FromStr;
 
+use pest::iterators::Pairs;
 use pest::Parser;
 use pest_derive::Parser;
-use std::fmt::Formatter;
+use serde::Serialize;
 
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 pub struct CommitScope(String);
+
+impl CommitScope {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
 
 impl From<String> for CommitScope {
     fn from(s: String) -> Self {
@@ -34,10 +42,9 @@ impl fmt::Display for CommitScope {
     }
 }
 
-
 /// Parsed commit message following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 /// convention.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct ConventionalMessage {
     pub ctype: CommitType,
     pub scope: Option<CommitScope>,
@@ -47,7 +54,7 @@ pub struct ConventionalMessage {
     pub trailers: Vec<(String, String)>,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 pub enum CommitType {
     ContinuousIntegration,
     Build,
@@ -94,44 +101,64 @@ impl FromStr for ConventionalMessage {
                             Rule::ctype => {
                                 message.ctype = pair.as_str().parse().expect("unfailable")
                             }
-                            Rule::scope => message.scope = Some(pair.as_str().parse().unwrap()),
+                            Rule::scope => {
+                                message.scope = Some(pair.as_str().parse().expect("unfailable"))
+                            }
                             Rule::summary => message.summary = pair.as_str().to_owned(),
                             Rule::break_mark => message.is_breaking = true,
                             _ => unreachable!(),
                         }
                     }
                 }
-                Rule::body => {
-                    message.body = Some(pair.as_str().trim().to_owned());
-                }
-                Rule::trailers => {
-                    let pairs = pair.clone().into_inner();
-                    for pair in pairs {
-                        if pair.as_rule() == Rule::EOI {
-                            break;
-                        }
-
-                        let mut pairs = pair.clone().into_inner();
-                        let token = pairs
-                            .next()
-                            .expect("broken parser: MUST have token")
-                            .as_str()
-                            .trim()
-                            .to_owned();
-                        let value = pairs
-                            .next()
-                            .expect("broken parser: MUST have value")
-                            .as_str()
-                            .trim()
-                            .to_owned();
-                        message.trailers.push((token, value));
-                    }
-                }
+                Rule::body => message.body = Some(pair.as_str().trim().to_owned()),
+                Rule::trailers => message.trailers = parse_trailers(pair.clone().into_inner()),
                 _ => unreachable!(),
             }
         }
 
         Ok(message)
+    }
+}
+
+fn parse_trailers(pairs: Pairs<Rule>) -> Vec<(String, String)> {
+    let mut trailers = Vec::new();
+    for pair in pairs {
+        if pair.as_rule() == Rule::EOI {
+            break;
+        }
+
+        let mut pairs = pair.clone().into_inner();
+        let token = pairs
+            .next()
+            .expect("broken parser: MUST have token")
+            .as_str()
+            .trim()
+            .to_owned();
+        let value = pairs
+            .next()
+            .expect("broken parser: MUST have value")
+            .as_str()
+            .trim()
+            .to_owned();
+        trailers.push((token, value));
+    }
+    trailers
+}
+
+impl CommitType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            CommitType::ContinuousIntegration => "ci",
+            CommitType::Build => "build",
+            CommitType::BugFix => "fix",
+            CommitType::Documentation => "docs",
+            CommitType::Feature => "feat",
+            CommitType::Performance => "perf",
+            CommitType::Refactoring => "refactor",
+            CommitType::Style => "style",
+            CommitType::Test => "test",
+            CommitType::Other(s) => s.as_str(),
+        }
     }
 }
 

@@ -1,5 +1,7 @@
 use clap::Clap;
 
+use crate::changelog::CommitField;
+use crate::report::OutputType;
 use crate::snapshots::BranchName;
 
 #[derive(Clap, Debug)]
@@ -7,6 +9,10 @@ use crate::snapshots::BranchName;
 pub struct Command {
     #[clap(subcommand)]
     pub sub_command: SubCommand,
+    #[clap(short, long, global(true), multiple_occurrences(true))]
+    pub verbose: bool,
+    #[clap(short, long, global(true), default_value = "yaml", possible_values = &["yaml"])]
+    pub output: OutputType,
 }
 
 #[derive(Clap, Debug)]
@@ -30,6 +36,15 @@ pub struct Repository {
     pub branches: Vec<BranchName>,
     #[clap(short, long)]
     pub team: Option<String>,
+    #[clap(
+    long,
+    global(true),
+    default_value = "branch,commit-type",
+    possible_values = &["branch", "commit-type", "scope"],
+    multiple(true),
+    require_delimiter(true)
+    )]
+    pub group_by: Vec<CommitField>,
 }
 
 #[derive(Clap, Debug)]
@@ -44,4 +59,13 @@ pub struct Projects {
     pub save_state: bool,
     #[clap(short, long)]
     pub from_snapshot: Option<String>,
+    #[clap(
+    long,
+    global(true),
+    default_value = "origin,branch,commit-type",
+    possible_values = &["branch", "commit-type", "origin", "scope"],
+    multiple(true),
+    require_delimiter(true)
+    )]
+    pub group_by: Vec<CommitField>,
 }

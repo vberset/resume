@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     fmt::{self, Formatter},
     fs::File,
-    io::BufReader,
+    io::{BufReader, BufWriter},
     path::Path,
     str::FromStr,
 };
@@ -11,19 +11,18 @@ use blake3::{Hash, Hasher};
 use git2::Oid;
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
-use std::io::BufWriter;
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
 pub struct CommitHash(String);
 
 impl CommitHash {
     pub fn as_str(&self) -> &str {
-        &self.0.as_str()
+        self.0.as_str()
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0.as_bytes()
+        self.0.as_bytes()
     }
 }
 
@@ -38,11 +37,11 @@ pub struct BranchName(String);
 
 impl BranchName {
     pub fn as_str(&self) -> &str {
-        &self.0.as_str()
+        self.0.as_str()
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0.as_bytes()
+        self.0.as_bytes()
     }
 }
 
@@ -71,11 +70,11 @@ pub struct RepositoryOrigin(String);
 
 impl RepositoryOrigin {
     pub fn as_str(&self) -> &str {
-        &self.0.as_str()
+        self.0.as_str()
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0.as_bytes()
+        self.0.as_bytes()
     }
 }
 
@@ -86,7 +85,7 @@ impl From<String> for RepositoryOrigin {
 }
 
 impl FromStr for RepositoryOrigin {
-    type Err = ();
+    type Err = Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         Ok(s.to_owned().into())
@@ -147,12 +146,27 @@ impl SnapshotHistory {
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        Ok(serde_yaml::from_reader(reader)?)
+        log::info!("load snapshots from file: {:?}", path.as_ref());
+        match File::open(path) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                Ok(serde_yaml::from_reader(reader)?)
+            }
+            Err(error) => {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    log::info!("snapshot file doesn't exist");
+                    Ok(Self {
+                        snapshots: Vec::new(),
+                    })
+                } else {
+                    Err(Error::from(error))
+                }
+            }
+        }
     }
 
     pub fn to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        log::info!("save snapshot file: {:?}", path.as_ref());
         let file = File::create(path)?;
         let writer = BufWriter::new(file);
         Ok(serde_yaml::to_writer(writer, &self)?)
