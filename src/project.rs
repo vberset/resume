@@ -1,12 +1,11 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use git2::{
-    build::RepoBuilder, Branch, BranchType, Cred, FetchOptions, Oid, RemoteCallbacks, Repository,
-    Revwalk,
+    build::RepoBuilder, Branch, BranchType, FetchOptions, Oid, RemoteCallbacks, Repository, Revwalk,
 };
+use git2_credentials::{ui4dialoguer::CredentialUI4Dialoguer, CredentialHandler};
 
 use crate::{
-    // changelog::ChangeSet,
     error::Result,
     message::ConventionalMessage,
     snapshots::{BranchName, CommitHash, RepositoryOrigin, RepositorySnapshot},
@@ -82,8 +81,11 @@ impl Project {
     /// Build default `FetchOptions`, with credentials' callback, etc
     fn default_fetch_options() -> FetchOptions<'static> {
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key_from_agent(username_from_url.unwrap())
+        let git_config = git2::Config::open_default().unwrap();
+        let mut ch =
+            CredentialHandler::new_with_ui(git_config, Box::new(CredentialUI4Dialoguer {}));
+        callbacks.credentials(move |url, username_from_url, allowed_types| {
+            ch.try_next_credential(url, username_from_url, allowed_types)
         });
 
         let mut fetch_option = FetchOptions::new();
