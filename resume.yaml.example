@@ -1,0 +1,5 @@
+projects:
+  - name: resume
+    origin: https://github.com/vberset/resume.git
+    branches:
+      - master
